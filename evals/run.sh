@@ -70,6 +70,7 @@ def test_reads_bom_header(tmp_path):
     p.write_bytes(b"\xef\xbb\xbf" + b"id,name\n1,a\n")
     assert read_rows(p)[0]["id"] == "1"
 EOF
+  cp "$r/tests/test_bom.py" "$dir/test_bom.orig"
   # A stamped copy of the source skill: the marker proves which copy the agent loaded.
   for d in .claude/skills .agents/skills; do
     mkdir -p "$r/$d"
@@ -161,11 +162,30 @@ run_agent() {
   fi
 }
 
-# provenance <dir>: the loaded skill was the stamped sandbox copy, or an installed copy identical
-# to the source (Claude Code ranks personal skills above project skills).
+# tool_outputs <dir>: text the harness returned to the agent (tool results, loaded skills), not text
+# the agent or the prompt wrote. tool_inputs <dir>: the arguments of the agent's tool calls.
+tool_outputs() {
+  if [ "$harness" = claude ]; then
+    jq -r 'select(.type == "user") | .message.content | tostring' "$1/trace.txt" 2> /dev/null
+  else
+    jq -r 'select(.type == "tool_execution_end") | .result | tostring' "$1/trace.txt" 2> /dev/null
+  fi
+}
+tool_inputs() {
+  if [ "$harness" = claude ]; then
+    jq -r 'select(.type == "assistant") | .message.content[]? | select(.type == "tool_use") | .input | tostring' "$1/trace.txt" 2> /dev/null
+  else
+    jq -r 'select(.type == "tool_execution_start") | .args | tostring' "$1/trace.txt" 2> /dev/null
+  fi
+}
+# provenance <dir>: the harness returned the stamped sandbox copy of the skill, or an installed copy
+# identical to the source (Claude Code ranks personal skills above project skills). The marker is
+# never in the prompt, so it can reach a tool output only by loading the skill.
 provenance() {
-  local dir=$1 base
-  grep -q "eval-provenance: $(basename "$dir")" "$dir/trace.txt" && return 0
+  local dir=$1 base marker
+  marker="eval-provenance: $(basename "$dir")"
+  ! grep -q "$marker" "$dir/prompt.md" || return 1
+  tool_outputs "$dir" | grep -q "$marker" && return 0
   base=$(grep -o 'Base directory for this skill: [^"\\]*' "$dir/trace.txt" | head -n 1 | sed 's/^Base directory for this skill: //')
   [ -n "$base" ] && [ -d "$base" ] && diff -rq "$base" "$source_skill" > /dev/null
 }
@@ -189,10 +209,11 @@ repo_md() { (cd "$1/widget" && git ls-files -co --exclude-standard -- '*.md' | w
 new_repo_md() { (cd "$1/widget" && { git diff --name-only --diff-filter=A "$(cat "$1/repo-head")"; git ls-files --others --exclude-standard; } | grep '\.md$'); }
 code_untouched() { [ -z "$(cd "$1/widget" && git diff "$(cat "$1/repo-head")" -- widget)" ]; }
 test_uncommitted() { (cd "$1/widget" && git ls-files --others --exclude-standard | grep -qx 'tests/test_bom.py'); }
-test_intact() { (cd "$1/widget" && grep -q 'xef' tests/test_bom.py && [ -z "$(git diff --name-only "$(cat "$1/repo-head")" -- tests/test_parse.py)" ]); }
+test_intact() { cmp -s "$1/test_bom.orig" "$1/widget/tests/test_bom.py" && [ -z "$(git -C "$1/widget" diff --name-only "$(cat "$1/repo-head")" -- tests/test_parse.py)" ]; }
+# A tool call named the sandbox preferences, and none named the user's own.
 read_own_preferences() {
-  grep -q "$1/config/saving-session-state/preferences.md" "$1/trace.txt" \
-    && ! grep -q -e "$HOME/.config/saving-session-state" -e '~/.config/saving-session-state' "$1/trace.txt"
+  tool_inputs "$1" | grep -q "$1/config/saving-session-state/preferences.md" \
+    && ! tool_inputs "$1" | grep -q -e "$HOME/.config/saving-session-state" -e '~/.config/saving-session-state'
 }
 
 for scenario in "${scenarios[@]}"; do
@@ -200,7 +221,10 @@ for scenario in "${scenarios[@]}"; do
   before=$failures
   dir=$(CDPATH= cd -- "$(mktemp -d "${TMPDIR:-/tmp}/saving-session-state-eval.XXXXXX")" && pwd -P)
   echo "== $scenario ($harness${model:+ $model}) sandbox: $dir"
-  if ! (set -e; setup "$dir" "$scenario") > "$dir/setup.log" 2>&1; then
+  # Not inside `if`: bash ignores `set -e` in a condition, so a failed setup step would go unnoticed.
+  (set -e; setup "$dir" "$scenario") > "$dir/setup.log" 2>&1
+  setup_rc=$?
+  if [ "$setup_rc" -ne 0 ]; then
     fail "sandbox setup (see $dir/setup.log)"
     scenario_failures=$((scenario_failures + 1))
     continue
@@ -254,6 +278,7 @@ for scenario in "${scenarios[@]}"; do
         check "the project note's stale current state was replaced" "! grep -q 'Investigating a KeyError' '$dir/notes/projects/widget.md'"
       else
         check "the notes home is unchanged" "notes_untouched '$dir'"
+        check "the repository is unchanged" "[ -z \"\$(git -C '$dir/widget' status --porcelain)\" ] && [ \"\$(git -C '$dir/widget' rev-parse HEAD)\" = \"\$(cat '$dir/repo-head')\" ]"
       fi
       ;;
   esac

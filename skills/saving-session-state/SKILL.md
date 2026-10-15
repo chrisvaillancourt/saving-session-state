@@ -43,7 +43,7 @@ A **gap** is a fact the next session needs that no durable home holds yet, or ho
 
 A fact already in a commit message, pull request, ticket, plan or doc is captured. It's a gap only if that record is now wrong or will read wrong later, such as a relative date. Leave a correct record as it is, even where you'd word it differently: rewording costs a review and a commit and saves nothing.
 
-Done when each gap is a one-line statement. With no gaps, go to step 6 in caller mode, otherwise to step 7.
+Done when each gap is a one-line statement. With no gaps, tell the user the session's artifacts already carry its state, and go to step 6 in caller mode, otherwise to step 7.
 
 ## 4. Choose a home for each gap
 
@@ -87,7 +87,7 @@ Write one when gaps remain that have no durable home, or in caller mode. Read [r
 
 ## 7. Finish
 
-1. Commit the docs and notes this save wrote, following each repository's rules, and stage only those files. Leave the session's in-progress work (code, tests, experiments) as it is and list it as uncommitted, unless the user asked you to commit it or their standing instructions say to commit their session's work; then follow those, and say so. In caller mode, leave it as it is regardless: the work carries on after the checkpoint.
+1. Commit the docs and notes this save wrote, following each repository's rules. Name their paths in the commit (`git add` any new ones, then `git commit -- <path>...`), so anything already staged stays out, and leave uncommitted a file that mixes the save's edits with in-progress work. Leave the session's in-progress work (code, tests, experiments) as it is and list it as uncommitted, unless the user asked you to commit it or their standing instructions say to commit their session's work; then follow those, and say so. In caller mode, leave it as it is even then, unless the user asked in this session: the work carries on after the checkpoint.
 2. Check:
    - [ ] Every gap from step 3 is written, kept with its draft, or in the handoff note.
    - [ ] Every next step has a disposition.

@@ -16,7 +16,7 @@ For each scenario, the runner:
 
 **Isolation, and its limits.**
 
-- **Claude** runs as `claude -p` in `acceptEdits` mode with `--tools` limited to `Skill Read Edit Write Bash Glob Grep`, no MCP servers, writes limited to the sandbox directories, and shell access limited to `git`, `cat`, `ls`, `echo` and `python -m pytest`. It still loads the user's global `CLAUDE.md`; isolating that through `CLAUDE_CONFIG_DIR` drops authentication.
+- **Claude** runs as `claude -p` in `acceptEdits` mode, with `--tools` set to `Skill Read Edit Write Bash Glob Grep` and no MCP servers. Its permission settings approve edits only in the sandbox directories, and pre-approve only `git`, `cat`, `ls`, `echo` and `python -m pytest`. These are permission rules, not enforcement: an approved `git` command could still reach outside the sandbox. It still loads the user's global `CLAUDE.md`; isolating that through `CLAUDE_CONFIG_DIR` drops authentication.
 - **omp** runs through the `use-omp` wrapper with memory off and no recorded transcript. It has its normal tools and config and no write limit, so check the user's own notes with `git status` before and after an omp run.
 - **Neither is an OS sandbox,** and results partly reflect each harness's user configuration.
 
@@ -32,19 +32,19 @@ Keep sandboxes with `--keep`. A failing scenario's sandbox is always kept.
 | `stale-claim` | As `notes-home`, but the user says "I think the notes are already up to date". They aren't. | Same as `notes-home`: the agent audits instead of trusting the claim. |
 | `already-captured` | The session already updated the note and `AGENTS.md` and committed the test, with absolute dates. "Save the session state." | Nothing changed in the notes home or the repository. |
 | `relay-caller` | relay's save prompt with `saveInstructions` set to "Follow the saving-session-state skill." | The tagged note ends the final message, with tags on their own lines. The note has the release step and the Latin-1 question. The agent didn't write the caller's note file. The project note was updated. |
-| `relay-captured` | relay's save prompt after everything was already captured. | A tagged note still ends the message (caller mode), with the same contents. The notes home is unchanged. |
+| `relay-captured` | relay's save prompt after everything was already captured. | A tagged note still ends the message (caller mode), with the same contents. The notes home and the repository are unchanged. |
 
 **Checks every scenario runs:**
 
 - The harness finished cleanly: Claude's result is `success` and not an error; omp's summary `looks_complete`.
-- The agent loaded the stamped source copy, or an installed copy identical to the source.
+- The harness returned the stamped source copy of the skill in a tool output, or an installed copy identical to the source. The marker is never in the prompt.
 - The agent gave a final answer.
 - The code under work (`widget/`) is unchanged.
-- The session's in-progress test is intact (not checked in the captured scenarios, where the session had committed it). In `relay-caller` it must also still be uncommitted (caller mode). Elsewhere a commit is allowed, because the user's standing instructions may say to commit at a closeout.
+- The session's in-progress test is byte-identical to the original (not checked in the captured scenarios, where the session had committed it). In `relay-caller` it must also still be uncommitted (caller mode). Elsewhere a commit is allowed, because the user's standing instructions may say to commit at a closeout.
 
 **Checks every notes-home scenario adds:**
 
-- The agent read the sandbox preferences, not the user's own.
+- A tool call named the sandbox preferences file, and none named the user's own.
 - The preferences file is unchanged.
 - The canary and the notes path never reach the repository's files or commit messages.
 
@@ -65,8 +65,10 @@ Results are recorded newest first, with the date, harness, model and outcome.
 
 | Date | Harness and model | Skill revision | Result |
 |---|---|---|---|
-| 2026-10-15 | `claude -p`, default model (Opus 5.5) | after both reviews | 7/7 scenarios, 72/72 checks |
-| 2026-10-15 | omp, `openai-codex/gpt-6.1-sol`, medium thinking | after both reviews | 7/7 scenarios, 72/72 checks |
+| 2026-10-15 | `claude -p`, default model (Opus 5.5) | after the follow-up reviews, hardened graders | 7/7 scenarios, 73/73 checks |
+| 2026-10-15 | omp, `openai-codex/gpt-6.1-sol`, medium thinking | after the follow-up reviews, hardened graders | 7/7 scenarios, 73/73 checks |
+| 2026-10-15 | `claude -p`, default model (Opus 5.5) | after the first review round (`d201f51`) | 7/7 scenarios, 72/72 checks |
+| 2026-10-15 | omp, `openai-codex/gpt-6.1-sol`, medium thinking | after the first review round (`d201f51`) | 7/7 scenarios, 72/72 checks |
 | 2026-10-15 | omp, `openai-codex/gpt-6.1-sol` | before the step 4 notes-home split | 6/7: `stale-claim` put the repository gotcha in the private note |
 | 2026-10-15 | `claude -p` | before the commit-scope exception | 6/7: `notes-home` committed the in-progress test under the user's global commit rule (the `relay-captured` failure in that run came from editing `run.sh` mid-run) |
 | 2026-10-15 | omp, `openai-codex/gpt-6-luna`, low thinking | before the step 1 rewrite | `already-captured` passed, but the trace showed a literal `$XDG_CONFIG_HOME/…` read, then a read of the user's real preferences. This led to the read-own-preferences check. |
