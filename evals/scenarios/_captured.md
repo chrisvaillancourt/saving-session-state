@@ -1,0 +1,1 @@
+- Before this summary ended, you updated `projects/widget.md` in my notes with the fix, the dropped approach, the next steps and the Latin-1 question; added the BOM fixture gotcha to the repository's `AGENTS.md`; and committed `tests/test_bom.py` with it.

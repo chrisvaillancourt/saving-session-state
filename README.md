@@ -10,7 +10,7 @@ At a stopping point, the agent:
 4. gives each gap one **durable home**: the repository's docs, your notes, a tracker, or a drafted ticket comment for you to approve;
 5. updates those homes in place, so a status section says where things stand now instead of growing into a log;
 6. writes a handoff note only for what has no other home, or when the tool that called it asks for one;
-7. commits its own changes and reports what it saved where.
+7. commits the docs and notes it wrote, leaving the session's in-progress work as it is, and reports what it saved where.
 
 When the session's artifacts already hold everything, it says so and writes nothing.
 
@@ -42,11 +42,19 @@ Start a new session after installing. A session that's already running may not s
 
 ## Use
 
-Say you're at a stopping point ("I'm done for today; save the session state", "update the notes with what we did") or invoke it by name: `/saving-session-state` in Claude Code or omp, `$saving-session-state` in Codex. Add focus in your own words: "make sure the notes cover the migration plan".
+Say you're at a stopping point ("I'm done for today; save the session state", "update the notes with what we did before I close this") or invoke it by name:
+
+| Harness | Command |
+|---|---|
+| Claude Code | `/saving-session-state` |
+| omp | `/skill:saving-session-state` |
+| Codex | `$saving-session-state` |
+
+Add focus in your own words: "make sure the notes cover the migration plan".
 
 ## Preferences
 
-Tell the skill where your notes live in `${XDG_CONFIG_HOME:-~/.config}/saving-session-state/preferences.md`. It's plain Markdown and sits outside the skill, so reinstalling leaves it alone, and every harness reads the same file. It covers:
+Tell the skill where your notes live in `saving-session-state/preferences.md` under your config directory: `$XDG_CONFIG_HOME` when it's set, otherwise `~/.config`. It's plain Markdown and sits outside the skill, so reinstalling leaves it alone, and every harness reads the same file. It covers:
 
 - the notes homes you keep (vaults, work logs, trackers), with absolute paths and the file that holds each one's rules;
 - which work belongs in each, and how to tell;
@@ -62,7 +70,9 @@ relay's `/relay` command saves, drafts a continuation prompt, compacts, then fil
 Follow the saving-session-state skill.
 ```
 
-Set it in `/config`, or under `pluginConfigs.relay.options.saveInstructions` in settings. relay still asks for the handoff note inside `<handoff-note>` tags and saves it itself. The skill's handoff-note reference covers that case: it puts the tagged note in its final message, writes no note file, and doesn't stop to ask questions, since the turn has to end for relay to continue.
+Set it in `/config`, or in settings under `pluginConfigs["relay@relay"].options.saveInstructions` (the key is the plugin id). relay still asks for the handoff note inside `<handoff-note>` tags and saves it itself. The skill calls this **caller mode**: it asks no questions, always ends with the tagged note (even when nothing else needed saving), puts drafts awaiting your approval in the note, writes no note file of its own, and leaves in-progress code uncommitted.
+
+Use relay 0.3.0 or later. It also takes the note from tags on their own lines, so a final message that mentions the tag names in prose can't be mistaken for the note.
 
 The skill must stay model-invocable for this to work, because the save turn asks the model to load it.
 
@@ -79,13 +89,14 @@ evals/run.sh                      behavioral evals through a real harness (costs
 evals/scenarios/, evals/fixtures/ the scripted sessions and the sandbox they run in
 docs/decisions.md                 what was decided and why, with revisit triggers
 docs/evals.md                     what each eval checks, and the latest results
+docs/2026-10-15-reviews.md        the two independent reviews and what was done about each finding
 ```
 
 ## Verify
 
 ```sh
 scripts/check.sh                 # free, about a second
-evals/run.sh                     # four scenarios through claude -p
+evals/run.sh                     # seven scenarios through claude -p
 USE_OMP_RUN=/path/to/run-omp.sh evals/run.sh --harness omp --model <provider/model>
 ```
 

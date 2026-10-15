@@ -12,6 +12,7 @@ This repository is the `saving-session-state` agent skill: the procedure an agen
 | Change the preferences file format | [references/preferences.md](skills/saving-session-state/references/preferences.md) and the README's Preferences section |
 | Know why something is the way it is, before changing it | [docs/decisions.md](docs/decisions.md) |
 | Run or change the evals, or read the latest results | [docs/evals.md](docs/evals.md) |
+| See what the independent reviews found and how each finding was handled | [docs/2026-10-15-reviews.md](docs/2026-10-15-reviews.md) |
 | Install, use, and how it composes with relay | [README.md](README.md) |
 
 ## Rules
@@ -21,6 +22,7 @@ This repository is the `saving-session-state` agent skill: the procedure an agen
 - **Keep the skill and docs publishable.** No personal paths, account names, emails or organization names. Personal routing belongs in the user's preferences file, never in the skill. `scripts/check.sh` scans for some of this.
 - **Respect the disclosure split.** SKILL.md holds what every run needs. A reference file holds one branch, is reached by a pointer in SKILL.md that names its condition, and links to no other reference file. Before moving material between them, read decision 6 in [docs/decisions.md](docs/decisions.md).
 - **The skill stays model-invocable.** relay's `saveInstructions` asks the model to load it, so it must not get `disable-model-invocation`.
+- **Caller mode is a contract with relay.** No questions, the tagged note always ends the turn, pending drafts go in the note, and in-progress work stays uncommitted. The `relay-caller` and `relay-captured` evals check it; change it only together with relay.
 - **Don't reverse a decision silently.** If a change contradicts [docs/decisions.md](docs/decisions.md), raise it with the user first. Record new or changed decisions there, with the evidence and when to revisit.
 - **Update every reference when something changes:** the README, AGENTS.md, docs, eval checks and the table above.
 

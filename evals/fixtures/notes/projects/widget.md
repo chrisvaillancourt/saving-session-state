@@ -1,6 +1,6 @@
 # widget
 
-Side project: reads CSV exports into dictionaries. Code: the `widget` repository.
+Side project: reads CSV exports into dictionaries. Private context: canary-q7v2. Code: the `widget` repository.
 
 ## Current state
 

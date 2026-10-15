@@ -13,10 +13,12 @@ Each entry records what was decided, why, the alternatives, and when to revisit 
 7. [Update in place; entry points hold current state](#7-update-in-place-entry-points-hold-current-state)
 8. [A handoff note only for leftovers](#8-a-handoff-note-only-for-leftovers)
 9. [Sharing rules that preferences can't relax](#9-sharing-rules-that-preferences-cant-relax)
-10. [No questions when the caller needs the turn to end](#10-no-questions-when-the-caller-needs-the-turn-to-end)
+10. [Caller mode](#10-caller-mode)
 11. [Composing with relay through `saveInstructions`](#11-composing-with-relay-through-saveinstructions)
 12. [Spec-only frontmatter](#12-spec-only-frontmatter)
 13. [Evals run the source skill in a sandbox](#13-evals-run-the-source-skill-in-a-sandbox)
+14. [A save commits only what it wrote](#14-a-save-commits-only-what-it-wrote)
+15. [A correct record stays as written](#15-a-correct-record-stays-as-written)
 
 ## 1. A standalone skill in its own repository
 
@@ -57,7 +59,7 @@ The skill starts from an earlier Claude Code skill, `saving-session-notes`, and 
 
 ## 4. Personal routing lives in a preferences file
 
-**Decision:** Which notes homes exist and when each applies lives in `${XDG_CONFIG_HOME:-$HOME/.config}/saving-session-state/preferences.md`, plain Markdown the agent reads in step 1. The skill itself names no paths.
+**Decision:** Which notes homes exist and when each applies lives in `saving-session-state/preferences.md` under the user's config directory (`$XDG_CONFIG_HOME`, else `~/.config`), plain Markdown the agent reads in step 1. The skill itself names no paths.
 
 **Why:**
 
@@ -68,6 +70,13 @@ The skill starts from an earlier Claude Code skill, `saving-session-notes`, and 
 - **Markdown suits the reader.** The reader is an agent, so prose rules ("use the vault when the repository has a project note there") beat a schema.
 
 **Alternatives:** routing in each harness's global instructions (duplicated, and not available to the skill's own logic); an environment variable (a path alone can't say when each home applies); hard-coding the user's vault in the skill (not publishable, and wrong for anyone else).
+
+**How the agent finds the file:** step 1 tells the agent to run `echo "$XDG_CONFIG_HOME"` and expand the directory itself. Two eval runs shaped that wording:
+
+- The first draft gave `cat "${XDG_CONFIG_HOME:-$HOME/.config}/…"`. Claude Code's bash safety check refused it ("A variable in braces in this command can't be checked before it runs"), and the agent fell back to `~/.config`.
+- The second draft said "`$XDG_CONFIG_HOME` when that's set (`echo "$XDG_CONFIG_HOME"` shows it)". gpt-6-luna in omp passed `$XDG_CONFIG_HOME/…` to its read tool literally, got "not found", then read the user's real `~/.config` file from inside an eval sandbox. Step 1 now makes the command the first action and says a file tool won't expand the variable. Every eval with a notes home checks that the agent read the sandbox's file and not the user's.
+
+A file the agent can't read (a refused permission) is reported, not treated as missing. Treating it as missing would quietly route everything to the defaults.
 
 **Revisit if:** harnesses gain a shared user-instructions file, or the open spec adds per-user skill configuration.
 
@@ -109,19 +118,28 @@ The skill starts from an earlier Claude Code skill, `saving-session-notes`, and 
 
 **Decision:** Two rules hold whatever the preferences say. Shared homes (repositories, tickets, pull requests) get only shared facts, never private note paths or content. Writes others can see are drafted for approval unless the user already asked for them in the session.
 
+Any public repository counts as shared, including one a single person owns. A draft stays a gap until it's sent, so its text is kept in a private home or the handoff note.
+
 **Why:** A closeout touches both private notes and shared systems in one pass, which is where private paths leak into commits and pull requests. A ticket comment or message can't be unsent, and the user has a standing rule to approve them.
 
-## 10. No questions when the caller needs the turn to end
+## 10. Caller mode
 
-**Decision:** When a calling tool needs the turn to finish (relay waits for the turn to end before it compacts), the skill picks the default, records the open question in the handoff note, and carries on.
+**Decision:** When a tool runs the skill as one step and needs the turn to end with the note in a set form (relay's `<handoff-note>` tags), the skill runs in caller mode. It asks no questions, records them under the note's open decisions, and always ends with the note, even when nothing else needed saving. Drafts awaiting approval go in the note, and the agent writes no note file of its own. The rule sits in SKILL.md's introduction because it changes steps 3, 4, 6 and 7.
 
-**Why:** A question would end the turn without the tagged note, and relay would then stop the run with nothing saved for the next session. Recording the question keeps the decision with the user without blocking.
+**Why:**
+
+- **No questions:** a question ends the turn without the note, and relay then compacts with nothing useful saved.
+- **Always a note:** the first draft's "no gaps, go to step 7" skipped the note. Both reviews found that relay would then save the whole final answer as the note.
+- **Drafts in the note:** relay compacts right after the turn and keeps only the tagged note, so a draft shown only in the report is lost. The omp review reproduced this with relay's own `extractNote`.
+- **A named mode:** it was a sentence inside step 6. The Opus review recommended naming it, so one rule covers every step it touches.
 
 ## 11. Composing with relay through `saveInstructions`
 
 **Decision:** relay (0.3.0) has a `saveInstructions` option that replaces only the first step of its save prompt. The user sets it to "Follow the saving-session-state skill." relay keeps the rest: the tagged-note contract, the note's contents, and "don't start new work".
 
 **Why:** relay needs the tagged note to draft its continuation prompt, so that contract stays in relay, where it's tested. The skill's handoff-note reference teaches the matching behavior: put the note in the tags and write no file. The option is generic, so the public plugin doesn't depend on this skill being installed.
+
+relay 0.3.0 also takes the note from tags on their own lines, the last such block. A model following the skill may quote the tag names in its report before the note, and the old first-match extraction returned that prose (found in review).
 
 **Alternatives:** relay calling the skill by name directly (couples a public plugin to one skill); the skill detecting relay's marker (couples the skill to one caller).
 
@@ -133,13 +151,30 @@ The skill starts from an earlier Claude Code skill, `saving-session-notes`, and 
 
 ## 13. Evals run the source skill in a sandbox
 
-**Decision:** `evals/run.sh` builds a fresh sandbox per scenario: a git repository, a notes home with its own history, and a preferences file reached through `XDG_CONFIG_HOME`. It links the source skill into the repository's `.claude/skills` and `.agents/skills`, runs a real harness headlessly (`claude -p` or omp through the `use-omp` wrapper), then checks files, commits and the final answer.
+**Decision:** `evals/run.sh` builds a fresh sandbox per scenario: a git repository, a notes home with its own history, and a preferences file reached through `XDG_CONFIG_HOME`. It places a copy of the source skill, stamped with a per-sandbox provenance marker, in the repository's `.claude/skills` and `.agents/skills`. It runs a real harness headlessly (`claude -p`, or omp through the `use-omp` wrapper), then checks the harness's own verdict, the provenance, files, commits and the final answer.
 
 **Why:**
 
-- Best practices call for evaluations built around real usage, and the risky behaviors here are routing decisions (which home, what stays out), which only a real agent run shows.
-- Linking the source tests this checkout, not an installed copy.
-- A sandbox keeps eval writes out of real notes: `claude -p` runs in `acceptEdits` mode, limited to the sandbox directories and a short list of shell commands.
-- A scripted session summary stands in for a real transcript. It's synthetic, but it's the same for every run, so results can be compared.
+- **Real runs:** best practices call for evaluations built around real usage. The risky behaviors here are routing decisions (which home, what stays out), which only a real agent run shows.
+- **The provenance marker** proves which copy loaded. Claude Code ranks personal skills above project skills, so once the skill is installed, a run could load the installed copy. The check accepts that only when the installed copy is identical to the source.
+- **The harness verdict counts:** a run that errors or hits a limit fails, even if its files happen to pass the other checks.
+- **A canary string in the private notes fixture** must never reach the repository's files or commit messages.
+- **A scripted session summary** stands in for a real transcript. It's synthetic, but identical every run, so results can be compared.
 
-**Revisit if:** a harness gains a way to seed a real conversation headlessly, or routing mistakes show up in real use that the scenarios don't cover (add a scenario).
+**Limits, stated plainly:** the sandbox is fixture-based, not OS-contained. `claude -p` runs in `acceptEdits` mode with `--tools` limited, MCP servers off, writes limited to the sandbox directories and a short shell allowlist, but it still loads the user's global `CLAUDE.md`. Isolating that through `CLAUDE_CONFIG_DIR` loses authentication. omp runs with its normal tools and config. Results partly reflect each harness's user configuration. Checks are keyword-based, not semantic. Compare the user's notes with `git status` before and after an omp run.
+
+**Revisit if:** a harness can seed a real conversation headlessly or run with isolated config and working authentication, routing mistakes show up in real use that the scenarios don't cover (add a scenario), or keyword checks prove too loose (add a model-graded rubric).
+
+## 14. A save commits only what it wrote
+
+**Decision:** Step 7 commits the docs and notes the save wrote. It leaves the session's in-progress work (code, tests, experiments) uncommitted and lists it, unless the user asked to commit it or their standing instructions say to commit their session's work. In caller mode it leaves that work alone regardless.
+
+**Why:** "Commit what you changed" covered the whole session's files. At a relay checkpoint mid-task, that commits half-done code, possibly onto `main`, which contradicts "record without advancing the work". Found by the Opus review.
+
+The standing-instructions exception came from an eval. In `notes-home`, Claude committed the session's finished test because the user's global instructions say to commit your own edits before finishing. It said so in its report. A user's own rule should win at a closeout. It doesn't apply at relay's checkpoint, where the task isn't finished, so caller mode keeps the work uncommitted. The evals check that the test is intact everywhere, and still uncommitted in `relay-caller`.
+
+## 15. A correct record stays as written
+
+**Decision:** A fact already captured is a gap only if the record is wrong or will read wrong later (a relative date). A correct record stays as written, even where the agent would word it differently.
+
+**Why:** In the first `already-captured` eval, the agent rewrote "tomorrow" to an absolute date, which was right, and also reworded correct sentences, which created churn and a commit for nothing. The fixture now uses absolute dates, and the scenario requires no changes at all.

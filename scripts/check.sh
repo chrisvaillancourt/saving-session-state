@@ -1,10 +1,12 @@
 #!/usr/bin/env bash
 # Offline checks for the saving-session-state skill: no model calls, about a second.
 # Usage: scripts/check.sh
-#   1. Frontmatter follows the Agent Skills spec (name, description, allowed fields).
+#   1. Frontmatter is valid YAML (parsed with Ruby's Psych when ruby is present) and follows
+#      the Agent Skills spec (name, description, allowed fields).
 #   2. Progressive disclosure: SKILL.md size, links resolve, references stay one level deep.
-#   3. Portability and privacy: forward-slash paths, no personal paths or org names.
-#   4. The skills CLI discovers the skill (skipped when `skills` isn't installed).
+#   3. Portability and privacy: forward-slash paths, and a heuristic scan for personal paths,
+#      org names and email addresses (not proof that nothing private remains).
+#   4. The skills CLI parses and discovers the skill (skipped when `skills` isn't installed).
 # Run after any edit to the skill or docs.
 set -uo pipefail
 
@@ -22,8 +24,21 @@ frontmatter=$(awk 'NR == 1 && $0 == "---" { inside = 1; next } inside && $0 == "
 field() { printf '%s\n' "$frontmatter" | sed -n "s/^$1: *//p" | head -n 1; }
 
 echo "== frontmatter"
-fm_name=$(field name)
-fm_desc=$(field description)
+keys=$(printf '%s\n' "$frontmatter" | sed -n 's/^\([A-Za-z_-]*\):.*/\1/p')
+if command -v ruby > /dev/null 2>&1; then
+  if fm_json=$(printf '%s\n' "$frontmatter" | ruby -ryaml -rjson -e 'd = YAML.safe_load(STDIN.read); raise "not a mapping" unless d.is_a?(Hash); puts JSON.generate(d)' 2> /dev/null); then
+    pass "frontmatter is valid YAML"
+    fm_name=$(printf '%s' "$fm_json" | jq -r '.name // ""')
+    fm_desc=$(printf '%s' "$fm_json" | jq -r '.description // ""')
+    keys=$(printf '%s' "$fm_json" | jq -r 'keys[]')
+  else
+    fail "frontmatter is not valid YAML (an unquoted colon in a value is the usual cause)"
+    fm_name=$(field name) fm_desc=$(field description)
+  fi
+else
+  skip "YAML parse (ruby not installed); the skills CLI check below still parses it"
+  fm_name=$(field name) fm_desc=$(field description)
+fi
 if [ "$fm_name" = "$name" ] && [ "$(basename "$skill")" = "$fm_name" ]; then
   pass "name matches its directory ($fm_name)"
 else
@@ -44,8 +59,7 @@ if printf '%s' "$fm_desc" | grep -q 'Use when'; then
 else
   fail "description needs a 'Use when' clause"
 fi
-extra=$(printf '%s\n' "$frontmatter" | sed -n 's/^\([A-Za-z_-]*\):.*/\1/p' \
-  | grep -Ev '^(name|description|license|compatibility|metadata|allowed-tools)$' || true)
+extra=$(printf '%s\n' "$keys" | grep -Ev '^(name|description|license|compatibility|metadata|allowed-tools)$' | grep -v '^$' || true)
 if [ -z "$extra" ]; then
   pass "frontmatter uses only fields from the open spec"
 else
@@ -113,11 +127,13 @@ fi
 
 echo "== skills CLI"
 if command -v skills > /dev/null 2>&1; then
-  listed=$(skills add "$repo" --list 2>&1 || true)
-  if printf "%s" "$listed" | grep -q "$name"; then
-    pass "skills add --list discovers $name"
+  listed=$(skills add "$repo" --list 2>&1)
+  rc=$?
+  if [ "$rc" -eq 0 ] && printf '%s\n' "$listed" | grep -q 'Found 1 skill' \
+    && printf '%s\n' "$listed" | grep -Eq "^[^A-Za-z0-9/]*$name[[:space:]]*$"; then
+    pass "skills add --list parses and discovers $name"
   else
-    fail "skills add --list does not discover $name"
+    fail "skills add --list did not discover $name (exit $rc)"
   fi
 else
   skip "skills CLI not installed"

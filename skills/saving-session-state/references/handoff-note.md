@@ -1,10 +1,10 @@
 # The handoff note
 
-Read this when step 6 calls for a handoff note. The note is the bridge to the next session, not the record: it holds the gaps that have no durable home, and points at the homes that hold everything else. A note that only lists artifacts isn't needed; the final report covers that.
+Read this when step 6 calls for a handoff note. The note is the bridge to the next session, not the record: it holds the gaps that have no durable home, and points at the homes that hold everything else.
 
 ## Where it goes
 
-1. **The caller's instructions win.** A tool that runs this skill may say where the note goes. When it asks for the note inside tags (for example "end with the handoff note inside `<handoff-note>` tags; it is saved for you"), make the tagged note the last thing in your final message and write no file yourself: the caller saves it.
+1. **In caller mode, the caller decides.** When it asks for the note inside tags, put the opening and closing tags each on a line of their own, and make the closing tag the last line of your final message. Write no file: the caller saves the note. With no gaps, the note still goes there; it lists where things stand and what to read first.
 2. **Otherwise, beside the work.** Use the tracker or notes-home note for this work, as a section or a sibling file, following the preferences file.
 3. **Otherwise, ask** where to put it, offering the location you'd pick.
 
@@ -35,8 +35,14 @@ Delete after the next session has folded this into durable homes.
 ## Next steps
 - <step> (do | defer | skip | drop): <why, and any precondition>
 
+## Drafts awaiting approval
+- <where it would go: ticket, pull request, channel>: <the full draft text, or the private file that holds it>
+
 ## Open decisions
 - <question>: <options, and who decides>
+
+## Unsaved
+- <what couldn't be written, where it was meant to go, and why>
 
 ## Files changed this session
 - <path>
