@@ -28,6 +28,12 @@ The skill is installed with the [`skills` CLI](https://github.com/vercel-labs/sk
 pnpm dlx skills add "$PWD" --skill saving-session-state --agent claude-code universal --global --yes
 ```
 
+Or install from GitHub without a checkout:
+
+```sh
+pnpm dlx skills add chrisvaillancourt/saving-session-state --skill saving-session-state --agent claude-code universal --global --yes
+```
+
 Where Socket Firewall is required, prefix the command with `sfw`. `npx --yes skills add …` works the same way, and so does a bare `skills add …` when the CLI is installed.
 
 Name both agents. `universal` puts the skill in `~/.agents/skills/saving-session-state`, the directory omp and Codex read. `claude-code` then symlinks it into `~/.claude/skills`, so all three harnesses share one copy. With `--agent claude-code` alone, the CLI (1.7.0, local source) copies the skill only into `~/.claude/skills`, and omp never sees it. For another harness, add its identifier from `skills add --help`.
