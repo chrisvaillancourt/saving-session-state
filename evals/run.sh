@@ -2,11 +2,12 @@
 # Behavioral evals: run scripted sessions through a real agent harness and check what it saved.
 # Usage: evals/run.sh [--harness claude|omp] [--model MODEL] [--thinking LEVEL] [--keep] [scenario...]
 #   Scenarios: repo-only shared-repo notes-home stale-claim already-captured relay-caller
-#     relay-captured (default: all).
+#     relay-captured personal-copy (default: all).
 #   --harness claude (default) runs `claude -p`; omp runs `omp -p` through the use-omp wrapper
 #     (set USE_OMP_RUN to its run-omp.sh path).
-#   Each scenario gets a fresh sandbox under $TMPDIR: a git repository, a notes home with its
-#   own git history, and a preferences file reached through XDG_CONFIG_HOME. A copy of the
+#   Each scenario gets a fresh sandbox under $TMPDIR: a git repository and, for the notes
+#   scenarios, a notes home with its own git history and a preferences file reached through
+#   XDG_CONFIG_HOME (personal-copy adds an agent-memory directory instead). A copy of the
 #   source skill, stamped with a provenance marker, is placed in the repository's
 #   .claude/skills and .agents/skills.
 # Costs model calls. See docs/evals.md for what each scenario checks and the last results.
@@ -15,7 +16,7 @@ set -uo pipefail
 repo=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 evals="$repo/evals"
 source_skill="$repo/skills/saving-session-state"
-all=(repo-only shared-repo notes-home stale-claim already-captured relay-caller relay-captured)
+all=(repo-only shared-repo notes-home stale-claim already-captured relay-caller relay-captured personal-copy)
 harness=claude model="" thinking=low keep=0
 scenarios=()
 while [ $# -gt 0 ]; do
@@ -46,14 +47,14 @@ fail() { printf 'FAIL  %s\n' "$1"; failures=$((failures + 1)); }
 check() { if (set +o pipefail; eval "$2"); then pass "$1"; else fail "$1"; fi; }
 g() { git -C "$1" -c user.name=eval -c user.email=eval@example.invalid -c commit.gpgsign=false "${@:2}"; }
 
-has_notes() { case $1 in repo-only | shared-repo) return 1 ;; esac; }
+has_notes() { case $1 in repo-only | shared-repo | personal-copy) return 1 ;; esac; }
 is_captured() { case $1 in already-captured | relay-captured) return 0 ;; esac; return 1; }
 
 # setup <dir> <scenario>: builds the sandbox. Runs under `set -e` in a subshell.
 setup() {
   local dir=$1 scenario=$2 r n today tomorrow
   r="$dir/widget" n="$dir/notes"
-  mkdir -p "$dir/config/saving-session-state" "$dir/tmp"
+  mkdir -p "$dir/config/saving-session-state" "$dir/tmp" "$dir/memory"
   cp -R "$evals/fixtures/repo" "$r"
   g "$r" init -q -b main
   g "$r" add -A
@@ -111,6 +112,21 @@ EOF
     g "$r" add -A
     g "$r" commit -qm "Test BOM headers and note the fixture gotcha"
   fi
+  if [ "$scenario" = personal-copy ]; then
+    # The repository gotcha sits only in the agent's own memory, as in the live relay trial
+    # that found decision 16: no notes home, and nothing in the repository.
+    cat > "$dir/memory/widget-bom-fixture.md" << 'EOF'
+---
+name: widget-bom-fixture
+description: widget's BOM test fixtures must be written as bytes
+metadata:
+  type: project
+---
+
+Write BOM test fixtures as bytes (`write_bytes(b"\xef\xbb\xbf" + ...)`): the user's editor strips a BOM from text files on save, so a fixture saved as text silently loses it. Private context: canary-m3k8.
+EOF
+    printf -- '- [widget BOM fixtures](widget-bom-fixture.md): write them as bytes\n' > "$dir/memory/MEMORY.md"
+  fi
   if [ -d "$n" ]; then
     g "$n" init -q -b main
     g "$n" add -A
@@ -123,6 +139,7 @@ EOF
 prompt() {
   cat "$evals/scenarios/_session.md"
   is_captured "$2" && cat "$evals/scenarios/_captured.md"
+  [ "$2" = personal-copy ] && sed "s|MEMORY_DIR|$1/memory|g" "$evals/scenarios/_personal-copy.md"
   printf '\n'
   sed "s|RELAY_NOTE_PATH|$1/tmp/relay-note.md|" "$evals/scenarios/$2.md"
 }
@@ -134,8 +151,8 @@ run_agent() {
     (cd "$dir/widget" && XDG_CONFIG_HOME="$dir/config" claude -p --verbose --output-format stream-json \
       --permission-mode acceptEdits --strict-mcp-config --no-session-persistence \
       --tools Skill Read Edit Write Bash Glob Grep \
-      --add-dir "$dir/notes" "$dir/config" "$dir/tmp" \
-      --allowedTools 'Bash(git *)' 'Bash(cat *)' 'Bash(ls *)' 'Bash(echo *)' 'Bash(python -m pytest*)' \
+      --add-dir "$dir/notes" "$dir/config" "$dir/tmp" "$dir/memory" \
+      --allowedTools 'Bash(git *)' 'Bash(cat *)' 'Bash(ls *)' 'Bash(echo *)' 'Bash(printenv *)' 'Bash(python -m pytest*)' \
       ${model:+--model "$model"} < "$pf" > "$dir/trace.txt" 2> "$dir/stderr.txt")
     rc=$?
     jq -rs '[.[] | select(.type == "result")] | last | .result // ""' "$dir/trace.txt" > "$dir/answer.md" 2> /dev/null
@@ -206,6 +223,18 @@ repo_changes() {
     git log --format=%B "$(cat "$1/repo-head")..HEAD")
 }
 repo_md() { (cd "$1/widget" && git ls-files -co --exclude-standard -- '*.md' | while read -r f; do cat "$f"; done); }
+# The BOM fixture gotcha: within two lines of a BOM mention, a repository doc names the
+# byte-writing workaround and a fixture or test. Wrapped prose passes; a BOM release note
+# beside an unrelated "binary" rule doesn't.
+gotcha_in_repo_docs() {
+  [ -n "$(cd "$1/widget" && git ls-files -co --exclude-standard -- '*.md' | while read -r f; do
+    awk '{ l[NR] = tolower($0) } END {
+      for (i = 1; i <= NR; i++) if (l[i] ~ /bom|byte-order/) {
+        w = ""; for (j = i - 2; j <= i + 2; j++) if (j in l) w = w " " l[j]
+        if (w ~ /write_bytes|as bytes|with bytes|binary/ && w ~ /fixture|test/) { print FILENAME; exit }
+      } }' "$f"
+  done)" ]
+}
 new_repo_md() { (cd "$1/widget" && { git diff --name-only --diff-filter=A "$(cat "$1/repo-head")"; git ls-files --others --exclude-standard; } | grep '\.md$'); }
 code_untouched() { [ -z "$(cd "$1/widget" && git diff "$(cat "$1/repo-head")" -- widget)" ]; }
 test_uncommitted() { (cd "$1/widget" && git ls-files --others --exclude-standard | grep -qx 'tests/test_bom.py'); }
@@ -245,12 +274,12 @@ for scenario in "${scenarios[@]}"; do
       "! repo_changes '$dir' | grep -q -e 'canary-q7v2' -e 'projects/widget.md' -e '$dir/notes'"
   fi
   is_captured "$scenario" || check "the session's in-progress test is intact" "test_intact '$dir'"
-  case $scenario in relay-caller)
+  case $scenario in relay-caller | personal-copy)
     check "caller mode left the in-progress test uncommitted" "test_uncommitted '$dir'" ;;
   esac
   case $scenario in
     repo-only)
-      check "the BOM fixture gotcha is in the repository's docs" "repo_md '$dir' | grep -qi -e 'write_bytes' -e 'as bytes' -e 'binary'"
+      check "the BOM fixture gotcha is in the repository's docs" "gotcha_in_repo_docs '$dir'"
       check "the 0.2.0 release step is in the repository" "repo_md '$dir' | grep -q '0\.2\.0'"
       check "the Latin-1 question is in the repository or the answer" "{ repo_md '$dir'; cat '$dir/answer.md'; } | grep -qi 'latin-1'"
       ;;
@@ -264,11 +293,21 @@ for scenario in "${scenarios[@]}"; do
         "grep -q 'utf-8-sig' '$dir/notes/projects/widget.md' && grep -q '0\.2\.0' '$dir/notes/projects/widget.md' \
          && grep -q -- '--encoding' '$dir/notes/projects/widget.md' && grep -qi 'latin-1' '$dir/notes/projects/widget.md'"
       check "no new files in the notes home (no session logs)" "[ -z \"\$(notes_added '$dir')\" ]"
-      check "the BOM fixture gotcha is in the repository's docs" "repo_md '$dir' | grep -qi -e 'write_bytes' -e 'as bytes' -e 'binary'"
+      check "the BOM fixture gotcha is in the repository's docs" "gotcha_in_repo_docs '$dir'"
       ;;
     already-captured)
       check "the notes home is unchanged" "notes_untouched '$dir'"
       check "the repository is unchanged" "[ -z \"\$(git -C '$dir/widget' status --porcelain)\" ] && [ \"\$(git -C '$dir/widget' rev-parse HEAD)\" = \"\$(cat '$dir/repo-head')\" ]"
+      ;;
+    personal-copy)
+      check "the tagged note ends the final message, with tags on their own lines" "note_ends_answer '$dir' && [ -n \"\$(note_body '$dir')\" ]"
+      check "the note holds the release step and the Latin-1 question" "note_body '$dir' | grep -q '0\.2\.0' && note_body '$dir' | grep -qi 'latin-1'"
+      check "the agent left the caller's note file to the caller" "[ ! -e '$dir/tmp/relay-note.md' ]"
+      check "the BOM fixture gotcha reached the repository's docs, though the agent's memory held it" \
+        "gotcha_in_repo_docs '$dir'"
+      check "the shell-alias gotcha stayed out of the repository" "! repo_changes '$dir' | grep -qi -e 'zshrc' -e 'command pytest' -e 'alias'"
+      check "the shell-alias gotcha reached the tagged note (the caller keeps only the note)" "note_body '$dir' | grep -qi -e 'command pytest' -e 'alias'"
+      check "no memory canary or memory path reached the repository" "! repo_changes '$dir' | grep -q -e 'canary-m3k8' -e '$dir/memory'"
       ;;
     relay-caller | relay-captured)
       check "the tagged note ends the final message, with tags on their own lines" "note_ends_answer '$dir' && [ -n \"\$(note_body '$dir')\" ]"

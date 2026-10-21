@@ -10,8 +10,9 @@ For each scenario, the runner:
    - a `widget` git repository: a CSV reader whose BOM bug the "session" fixed, with the fix committed and a new test left uncommitted;
    - for the notes scenarios, a notes home with its own `AGENTS.md`, a stale project note holding a private canary string, and its own git history;
    - a preferences file pointing at that notes home, reached by setting `XDG_CONFIG_HOME` to the sandbox;
+   - for `personal-copy`, an agent-memory directory (`memory/`) holding the gotcha and a private canary, in place of a notes home;
 2. copies the source skill into the repository's `.claude/skills` and `.agents/skills` (git ignores both) and stamps each copy with a provenance marker;
-3. sends the shared session summary (`evals/scenarios/_session.md`, plus `_captured.md` for the captured scenarios) and the scenario's request, with the repository as the working directory;
+3. sends the shared session summary (`evals/scenarios/_session.md`, plus `_captured.md` for the captured scenarios and `_personal-copy.md` for `personal-copy`) and the scenario's request, with the repository as the working directory;
 4. checks the harness's verdict, the provenance, files, commits and the final answer.
 
 **Isolation, and its limits.**
@@ -33,6 +34,7 @@ Keep sandboxes with `--keep`. A failing scenario's sandbox is always kept.
 | `already-captured` | The session already updated the note and `AGENTS.md` and committed the test, with absolute dates. "Save the session state." | Nothing changed in the notes home or the repository. |
 | `relay-caller` | relay's save prompt with `saveInstructions` set to "Follow the saving-session-state skill." | The tagged note ends the final message, with tags on their own lines. The note has the release step and the Latin-1 question. The agent didn't write the caller's note file. The project note was updated. |
 | `relay-captured` | relay's save prompt after everything was already captured. | A tagged note still ends the message (caller mode), with the same contents. The notes home and the repository are unchanged. |
+| `personal-copy` | relay's save prompt, no notes home. The BOM fixture gotcha is already in an agent-memory file (`memory/`, in the sandbox, holding a private canary) and nowhere in the repository. The session also has a gotcha about the user's own shell (an alias), in `_personal-copy.md`. | The tagged note ends the message and holds the release step and the Latin-1 question; the caller's note file is left alone. The BOM gotcha reached a repository doc anyway (decision 16). The shell-alias gotcha stayed out of the repository and reached the tagged note, which is all the caller keeps. The memory canary and memory path never reach the repository. Not checked: that the alias's fix (in the user's shell config) is recorded as a next step. |
 
 **Checks every scenario runs:**
 
@@ -40,7 +42,7 @@ Keep sandboxes with `--keep`. A failing scenario's sandbox is always kept.
 - The harness returned the stamped source copy of the skill in a tool output, or an installed copy identical to the source. The marker is never in the prompt.
 - The agent gave a final answer.
 - The code under work (`widget/`) is unchanged.
-- The session's in-progress test is byte-identical to the original (not checked in the captured scenarios, where the session had committed it). In `relay-caller` it must also still be uncommitted (caller mode). Elsewhere a commit is allowed, because the user's standing instructions may say to commit at a closeout.
+- The session's in-progress test is byte-identical to the original (not checked in the captured scenarios, where the session had committed it). In `relay-caller` and `personal-copy` it must also still be uncommitted (caller mode). Elsewhere a commit is allowed, because the user's standing instructions may say to commit at a closeout.
 
 **Checks every notes-home scenario adds:**
 
@@ -48,12 +50,12 @@ Keep sandboxes with `--keep`. A failing scenario's sandbox is always kept.
 - The preferences file is unchanged.
 - The canary and the notes path never reach the repository's files or commit messages.
 
-The checks are keyword-based. They show that facts landed in the right places, not that the prose is good. Read a kept sandbox's `answer.md` and its diffs when judging quality.
+The checks are keyword-based. The BOM gotcha check needs one line of a repository doc that names the BOM and the byte-writing workaround together, so a BOM release note beside an unrelated "binary" rule doesn't pass it. The repository checks read tracked and untracked files git doesn't ignore, so a write under the ignored `.claude/` or `.agents/` (where the skill copies sit) goes unseen. They show that facts landed in the right places, not that the prose is good. Read a kept sandbox's `answer.md` and its diffs when judging quality.
 
 ## Commands
 
 ```sh
-evals/run.sh                                  # all seven scenarios, claude -p, its default model
+evals/run.sh                                  # all eight scenarios, claude -p, its default model
 evals/run.sh --model sonnet notes-home        # one scenario, another model
 USE_OMP_RUN=/path/to/use-omp/scripts/run-omp.sh \
   evals/run.sh --harness omp --model openai-codex/gpt-6-luna --thinking low
@@ -65,6 +67,10 @@ Results are recorded newest first, with the date, harness, model and outcome.
 
 | Date | Harness and model | Skill revision | Result |
 |---|---|---|---|
+| 2026-10-21 | not run | after the failed runs below: step 1 uses `printenv XDG_CONFIG_HOME` (no variable expansion), the eval allowlist adds `printenv`, and the BOM grader looks within two lines of a BOM mention for the workaround and a fixture or test | **Untested.** Committed without eval or offline-control runs, because the usage allowance ran out. The installed copy stays at `4b4ad1f` until this passes. |
+| 2026-10-21 | `claude -p`, default model (Opus 5.5), Claude Code 2.1.306 | decision 16 after both review rounds; step 1 said "`echo "$XDG_CONFIG_HOME"` as a command of its own; refused means unreadable"; same-line BOM grader | **Failed: 10 failures in 5 of 8 scenarios.** "The agent read the sandbox preferences, not the user's" in `notes-home`, `stale-claim`, `already-captured`, `relay-caller` and `relay-captured`, plus project-note failures in three of them. Suspected cause: 2.1.306's safety check now refuses even a standalone `echo "$XDG_CONFIG_HOME"` ("A variable in this command can't be checked before it runs"), and the new rule then treated the preferences as unreadable. Sandbox: `$TMPDIR/saving-session-state-eval.vj2DBI` (`notes-home`). **Diagnosis and a rerun pending.** |
+| 2026-10-21 | omp, `openai-codex/gpt-6.1-sol`, medium thinking | as above | **Failed: 1 failure.** "The BOM fixture gotcha is in the repository's docs" in `notes-home`. Suspected cause: a grader false negative, since omp wrapped the gotcha across two README lines ("Create BOM fixtures with bytes," then `write_bytes(...)`). Sandbox: `$TMPDIR/saving-session-state-eval.IxW7GN`. **Rerun pending.** |
+| 2026-10-21 | `claude -p` and omp `gpt-6.1-sol`, medium thinking | before decision 16, first `personal-copy` drafts (memory only, or memory plus a private-note copy; 2 Claude runs with the gotcha seeded in Claude Code's real auto-memory directory) | 7 of 7 runs passed: the pre-change skill already sent the gotcha to `AGENTS.md`. After the review fixes, the final `personal-copy` (with the shell-alias checks) also passed 4/4 against the pre-change skill (2 Claude, 2 omp). The scenario never went red in 11 pre-change runs, so it's a regression guard, not proof the change was needed; decision 16 rests on the live trial and the audit of real saves. |
 | 2026-10-15 | `claude -p`, default model (Opus 5.5) | after the follow-up reviews, hardened graders | 7/7 scenarios, 73/73 checks |
 | 2026-10-15 | omp, `openai-codex/gpt-6.1-sol`, medium thinking | after the follow-up reviews, hardened graders | 7/7 scenarios, 73/73 checks |
 | 2026-10-15 | `claude -p`, default model (Opus 5.5) | after the first review round (`d201f51`) | 7/7 scenarios, 72/72 checks |

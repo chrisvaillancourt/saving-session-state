@@ -1,0 +1,3 @@
+- widget is my private side project; I don't keep notes for it anywhere else.
+- When I mentioned the BOM fixture gotcha, your memory saved it to `MEMORY_DIR/widget-bom-fixture.md` (indexed in `MEMORY_DIR/MEMORY.md`). Nothing else from this session has been saved anywhere yet.
+- A gotcha about my own shell, not the project: my `.zshrc` aliases `pytest` to `pytest -x`, so a bare `pytest` stops at the first failure. I run `command pytest` when I need the whole suite.

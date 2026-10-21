@@ -7,7 +7,7 @@ At a stopping point, the agent:
 1. reads your preferences, which say where your notes live and when to use them;
 2. lists everything the session touched, checking each repository with git;
 3. finds the **gaps**: decisions, gotchas, workarounds, status, next steps and open questions that live only in the conversation;
-4. gives each gap one **durable home**: the repository's docs, your notes, a tracker, or a drafted ticket comment for you to approve;
+4. gives each gap one **durable home**: the repository's docs, your notes, a tracker, or a drafted ticket comment for you to approve. A repository's gotcha goes to the repository even when your notes or an agent's memory already hold it, and a gotcha with a fixable cause gets its fix recorded as a next step, not only its workaround;
 5. updates those homes in place, so a status section says where things stand now instead of growing into a log;
 6. writes a handoff note only for what has no other home, or when the tool that called it asks for one;
 7. commits the docs and notes it wrote, leaving the session's in-progress work as it is, and reports what it saved where.
@@ -64,9 +64,10 @@ Tell the skill where your notes live in `saving-session-state/preferences.md` un
 
 - the notes homes you keep (vaults, work logs, trackers), with absolute paths and the file that holds each one's rules;
 - which work belongs in each, and how to tell;
-- what never goes where, for example private note paths in shared repositories.
+- what never goes where, for example private note paths in shared repositories;
+- where gotchas about your own setup go (environment, shell, harness, tools installed from elsewhere), and where you fix such things at their source.
 
-Without the file, the skill uses the repository's own docs and asks before creating a new home. [references/preferences.md](skills/saving-session-state/references/preferences.md) has an example.
+Without the file, the skill uses the repository's own docs, keeps setup gotchas in the handoff note, and asks before creating a new home. [references/preferences.md](skills/saving-session-state/references/preferences.md) has an example.
 
 ## Use with relay
 
@@ -95,14 +96,15 @@ evals/run.sh                      behavioral evals through a real harness (costs
 evals/scenarios/, evals/fixtures/ the scripted sessions and the sandbox they run in
 docs/decisions.md                 what was decided and why, with revisit triggers
 docs/evals.md                     what each eval checks, and the latest results
-docs/2026-10-15-reviews.md        the two independent reviews and what was done about each finding
+docs/2026-10-15-reviews.md        the first build's two independent reviews and what was done about each finding
+docs/2026-10-21-reviews.md        the reviews of decision 16 (repository gotchas go to the repository)
 ```
 
 ## Verify
 
 ```sh
 scripts/check.sh                 # free, about a second
-evals/run.sh                     # seven scenarios through claude -p
+evals/run.sh                     # eight scenarios through claude -p
 USE_OMP_RUN=/path/to/run-omp.sh evals/run.sh --harness omp --model <provider/model>
 ```
 

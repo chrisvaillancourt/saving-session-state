@@ -12,7 +12,7 @@ This repository is the `saving-session-state` agent skill: the procedure an agen
 | Change the preferences file format | [references/preferences.md](skills/saving-session-state/references/preferences.md) and the README's Preferences section |
 | Know why something is the way it is, before changing it | [docs/decisions.md](docs/decisions.md) |
 | Run or change the evals, or read the latest results | [docs/evals.md](docs/evals.md) |
-| See what the independent reviews found and how each finding was handled | [docs/2026-10-15-reviews.md](docs/2026-10-15-reviews.md) |
+| See what the independent reviews found and how each finding was handled | [docs/2026-10-15-reviews.md](docs/2026-10-15-reviews.md) (the first build), [docs/2026-10-21-reviews.md](docs/2026-10-21-reviews.md) (decision 16) |
 | Install, use, and how it composes with relay | [README.md](README.md) |
 
 ## Rules

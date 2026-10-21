@@ -19,6 +19,7 @@ Each entry records what was decided, why, the alternatives, and when to revisit 
 13. [Evals run the source skill in a sandbox](#13-evals-run-the-source-skill-in-a-sandbox)
 14. [A save commits only what it wrote](#14-a-save-commits-only-what-it-wrote)
 15. [A correct record stays as written](#15-a-correct-record-stays-as-written)
+16. [Repository gotchas go to the repository; fixes are recorded, not made](#16-repository-gotchas-go-to-the-repository-fixes-are-recorded-not-made)
 
 ## 1. A standalone skill in its own repository
 
@@ -71,10 +72,11 @@ The skill starts from an earlier Claude Code skill, `saving-session-notes`, and 
 
 **Alternatives:** routing in each harness's global instructions (duplicated, and not available to the skill's own logic); an environment variable (a path alone can't say when each home applies); hard-coding the user's vault in the skill (not publishable, and wrong for anyone else).
 
-**How the agent finds the file:** step 1 tells the agent to run `echo "$XDG_CONFIG_HOME"` and expand the directory itself. Two eval runs shaped that wording:
+**How the agent finds the file:** step 1 tells the agent to run `printenv XDG_CONFIG_HOME` and write out the directory itself. Three eval runs shaped that wording:
 
 - The first draft gave `cat "${XDG_CONFIG_HOME:-$HOME/.config}/…"`. Claude Code's bash safety check refused it ("A variable in braces in this command can't be checked before it runs"), and the agent fell back to `~/.config`.
 - The second draft said "`$XDG_CONFIG_HOME` when that's set (`echo "$XDG_CONFIG_HOME"` shows it)". gpt-6-luna in omp passed `$XDG_CONFIG_HOME/…` to its read tool literally, got "not found", then read the user's real `~/.config` file from inside an eval sandbox. Step 1 now makes the command the first action and says a file tool won't expand the variable. Every eval with a notes home checks that the agent read the sandbox's file and not the user's.
+- A third run (2026-10-21) found Claude joining the `echo` to other commands (`echo "$XDG_CONFIG_HOME"; git status; …`). The safety check refused the joined command ("A variable in this command can't be checked before it runs"), and the agent fell back to `~/.config` and read the user's real file from the sandbox, in 2 of 8 scenarios. Step 1 then said to run the `echo` as a command of its own, and that a refused command means the directory is unknown. The final run failed with that wording: Claude Code 2.1.306 refuses even a standalone `echo "$XDG_CONFIG_HOME"`, so the agent treated the preferences as unreadable. Step 1 now runs `printenv XDG_CONFIG_HOME`, which names the variable without expanding it. **Untested** as of 2026-10-21; see [evals.md](evals.md#results). The joined form also appeared in real relay saves.
 
 A file the agent can't read (a refused permission) is reported, not treated as missing. Treating it as missing would quietly route everything to the defaults.
 
@@ -178,3 +180,19 @@ The standing-instructions exception came from an eval. In `notes-home`, Claude c
 **Decision:** A fact already captured is a gap only if the record is wrong or will read wrong later (a relative date). A correct record stays as written, even where the agent would word it differently.
 
 **Why:** In the first `already-captured` eval, the agent rewrote "tomorrow" to an absolute date, which was right, and also reworded correct sentences, which created churn and a commit for nothing. The fixture now uses absolute dates, and the scenario requires no changes at all.
+
+## 16. Repository gotchas go to the repository; fixes are recorded, not made
+
+**Decision:** A copy of a fact in a personal home (an agent's memory, the user's private notes) doesn't capture a fact that belongs in a shared home: a repository's gotcha or convention is still a gap for the repository (step 3). Gotchas about the user's own setup (environment, shell, harness, or a tool or skill installed from elsewhere) have their own row in step 4: the agent memory or notes home the preferences name for them, else the handoff note. A gotcha with a personal trigger but a workaround in the repository's code, tests or commands is a repository gotcha. When a gotcha's cause can be changed, the save records the gotcha and its workaround in its home and adds the fix as a next step that names where it belongs, drafted as a ticket, issue or pull request description when that's a shared or another tool's repository. The save leaves the cause unchanged. The sharing rule now says a repository fact that also sits in private notes is a shared fact, so moving it into the repository isn't a leak of private content.
+
+**Why:**
+
+- **Found in a live relay trial (2026-10-15):** Claude Code's own memory saved a repository gotcha mid-conversation. At the checkpoint, the skill counted that memory file as captured, so the gotcha never reached `AGENTS.md`. That memory is read by one harness, for one checkout path, by one user.
+- **Found in an audit of real saves (2026-10-21):** a test-runner gotcha caused by a repository's own config (a flag in its default test options) sat in private notes across several sessions and never reached the repository. It had recurred in several sessions, so fixing the config would remove it.
+- **"Record without advancing the work" still holds.** Making the fix during a save would change code at a checkpoint. Recording it as a next step, or as a draft others approve, keeps the save a record.
+
+**Alternatives:** leave memory out of the rules and rely on step 4's "facts that anyone working in the repository needs still go to the repository" (that sentence existed, and the trial still missed); have the save make small fixes (contradicts step 7 and caller mode).
+
+**Evidence, and its limits:** the evidence is the live trial and the audit above, both observational. The `personal-copy` eval is a regression guard, not a reproduction: every check passed in all 11 runs against the pre-change skill (Claude and omp, including 2 Claude runs with the gotcha in Claude Code's real auto-memory directory, and 4 with the shell-alias checks). So it doesn't meet AGENTS.md's "fails without it" rule, recorded here as an exception: the scripted sandbox didn't reproduce the trial's miss, and the models already keep a shell alias out of the repository. "Record the fix as a next step" has no check at all. See [evals.md](evals.md#results).
+
+**Revisit if:** an eval or real save puts a personal-setup gotcha in a shared repository; a real save records a fixable gotcha's workaround with no fix as a next step (add a check then); saves start drafting fixes nobody asked for; or someone wants a variant whose preferences route setup gotchas to an agent memory, the realistic way a repository gotcha could be mistaken for a setup one.

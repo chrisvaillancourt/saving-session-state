@@ -17,7 +17,7 @@ The conversation is about to end or be compacted, and anything that lives only i
 
 ## 1. Load preferences and instructions
 
-Find the user's config directory by running `echo "$XDG_CONFIG_HOME"`. It's the printed directory, or `~/.config` when nothing prints. Read `saving-session-state/preferences.md` there. Expand the directory yourself: a file tool won't expand `$XDG_CONFIG_HOME`.
+Find the user's config directory by running `printenv XDG_CONFIG_HOME` as a command of its own. It names the variable without expanding it, which some harnesses' safety checks refuse (`echo "$XDG_CONFIG_HOME"`, or the variable inside a longer command). It's the printed directory, or `~/.config` when the command ran and printed nothing (it exits 1 when the variable is unset). If it's refused, you don't know the directory: don't guess `~/.config`; treat the preferences as unreadable (below). Read `saving-session-state/preferences.md` there, writing out the directory yourself: a file tool won't expand `$XDG_CONFIG_HOME`.
 
 The preferences name the user's **notes homes** (a notes vault, a work log, a tracker) and when each applies. Their rules win over this skill's defaults, except the sharing rules in step 4. No file at that path means there are no notes homes beyond what your loaded instructions name. A file you can't read, for example after a refused permission, isn't the same as a missing one: say so, and keep the gaps that would have gone to a notes home for the handoff note. To create the file, change it, or make sense of an unclear one, read [references/preferences.md](references/preferences.md).
 
@@ -43,6 +43,8 @@ A **gap** is a fact the next session needs that no durable home holds yet, or ho
 
 A fact already in a commit message, pull request, ticket, plan or doc is captured. It's a gap only if that record is now wrong or will read wrong later, such as a relative date. Leave a correct record as it is, even where you'd word it differently: rewording costs a review and a commit and saves nothing.
 
+A copy in a personal home doesn't capture a fact that belongs in a shared one. An agent's memory (read by one harness, often for one checkout) and the user's private notes don't count for a repository's rule, gotcha or convention: it's still a gap for the repository.
+
 Done when each gap is a one-line statement. With no gaps, tell the user the session's artifacts already carry its state, and go to step 6 in caller mode, otherwise to step 7.
 
 ## 4. Choose a home for each gap
@@ -56,15 +58,18 @@ Give each gap one home, and link to it from anywhere else that needs it. Default
 | A design decision and its reasoning | where the repository records decisions (decision log, plan, design doc), else the pull request or ticket |
 | Status of shared work: progress, acceptance details, blockers | the ticket or pull request |
 | Personal working context: in-flight state, private reasoning, next steps across sessions | the existing tracker or notes-home note for this work |
+| A gotcha about the user's own setup: environment, shell, harness, or an installed tool or skill whose source isn't this repository | the agent memory or notes home the preferences name for these; with none, the handoff note |
 | A gap no home fits | the handoff note (step 6) |
 
-A notes home that applies takes the personal rows. Facts that anyone working in the repository needs still go to the repository, even when the user keeps notes about it elsewhere.
+A notes home that applies takes the personal rows. Facts that anyone working in the repository needs still go to the repository, even when the user keeps notes about it elsewhere. A gotcha is the repository's when someone without the user's setup could hit it, or when its workaround is a change to the repository's code or tests (a fixture written as bytes), even if the user's setup triggered it.
+
+**Record the fix; don't make it.** A gotcha whose cause can be changed (a repository's config, a CLI, a skill, the user's dotfiles) is better fixed than documented. Record the gotcha and its workaround in its home as above, and add the fix as a next step that names where it belongs: drafted as a ticket, issue or pull request description when that's a shared repository or another tool's. Leave the cause unchanged during the save: changing it would advance the work.
 
 Before writing to a home, read and follow its instructions (the `AGENTS.md` or `CLAUDE.md` that governs it).
 
 Sharing rules, which preferences can't relax:
 
-- **Shared homes get shared facts.** A repository, ticket or pull request that others can read, including any public repository, gets only what helps them, never paths, filenames or content from private notes. Private notes may link to public artifacts freely.
+- **Shared homes get shared facts.** A repository, ticket or pull request that others can read, including any public repository, gets only what helps them, never paths, filenames or private context from private notes or an agent's memory. A repository fact that also sits in either is a shared fact. Private notes may link to public artifacts freely.
 - **Writes others see wait for approval.** Draft ticket comments, pull request edits and messages, and show them to the user. Send one only if the user already asked for it in this session. Until it's sent, a draft is still a gap: keep its text in a private home or the handoff note.
 
 When no existing home fits a gap that should outlive the handoff note, read [references/new-homes.md](references/new-homes.md) before creating anything.
