@@ -57,7 +57,7 @@ The checks are keyword-based. The BOM gotcha check needs one line of a repositor
 ```sh
 evals/run.sh                                  # all eight scenarios, claude -p, its default model
 evals/run.sh --model sonnet notes-home        # one scenario, another model
-evals/run.sh --hide-user-skills               # the source, while an older copy is installed
+evals/run.sh --hide-user-skills               # the source, while an older copy is installed (global CLAUDE.md passed as text: no @-imports, no user rules)
 USE_OMP_RUN=/path/to/use-omp/scripts/run-omp.sh \
   evals/run.sh --harness omp --model openai-codex/gpt-6-luna --thinking low
 ```
