@@ -45,7 +45,8 @@ case $harness in
 esac
 # Claude Code ranks personal skills above project skills, so an installed copy that differs from
 # the source shadows the sandbox copy. Hiding user settings hides it; the global CLAUDE.md that
-# also lives there is passed back in so the user's standing rules still apply.
+# also lives there is passed back in as literal text. Its @-imports aren't expanded and user-level
+# .claude/rules/ files aren't loaded, so a user who relies on either runs with fewer standing rules.
 user_args=()
 if [ "$hide_user" = 1 ]; then
   [ "$harness" = claude ] || { echo "--hide-user-skills is for --harness claude" >&2; exit 2; }
