@@ -105,6 +105,7 @@ docs/2026-10-21-reviews.md        the reviews of decision 16 (repository gotchas
 ```sh
 scripts/check.sh                 # free, about a second
 evals/run.sh                     # eight scenarios through claude -p
+evals/run.sh --hide-user-skills  # the same, while an older copy is installed
 USE_OMP_RUN=/path/to/run-omp.sh evals/run.sh --harness omp --model <provider/model>
 ```
 

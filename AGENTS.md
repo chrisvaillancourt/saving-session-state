@@ -17,7 +17,7 @@ This repository is the `saving-session-state` agent skill: the procedure an agen
 
 ## Rules
 
-- **The installed copy is separate.** `skills add … --agent claude-code universal --global` copies the skill to `~/.agents/skills` and symlinks it into `~/.claude/skills` (see the README; `claude-code` alone skips `~/.agents/skills`, so omp misses it). Editing this checkout doesn't change it. Ask the user before reinstalling.
+- **The installed copy is separate.** `skills add … --agent claude-code universal --global` copies the skill to `~/.agents/skills` and symlinks it into `~/.claude/skills` (see the README; `claude-code` alone skips `~/.agents/skills`, so omp misses it). Editing this checkout doesn't change it. Ask the user before reinstalling. To eval the source with Claude while an older copy is installed, run `evals/run.sh --hide-user-skills`.
 - **Keep the skill harness-neutral.** Frontmatter uses only the open spec's fields. The body names actions ("read", "commit"), not one harness's tool names, and uses no harness variables such as `${CLAUDE_SKILL_DIR}`. `scripts/check.sh` enforces the frontmatter part.
 - **Keep the skill and docs publishable.** No personal paths, account names, emails or organization names. Personal routing belongs in the user's preferences file, never in the skill. `scripts/check.sh` scans for some of this.
 - **Respect the disclosure split.** SKILL.md holds what every run needs. A reference file holds one branch, is reached by a pointer in SKILL.md that names its condition, and links to no other reference file. Before moving material between them, read decision 6 in [docs/decisions.md](docs/decisions.md).

@@ -1,10 +1,13 @@
 #!/usr/bin/env bash
 # Behavioral evals: run scripted sessions through a real agent harness and check what it saved.
-# Usage: evals/run.sh [--harness claude|omp] [--model MODEL] [--thinking LEVEL] [--keep] [scenario...]
+# Usage: evals/run.sh [--harness claude|omp] [--model MODEL] [--thinking LEVEL] [--keep]
+#                     [--hide-user-skills] [scenario...]
 #   Scenarios: repo-only shared-repo notes-home stale-claim already-captured relay-caller
 #     relay-captured personal-copy (default: all).
 #   --harness claude (default) runs `claude -p`; omp runs `omp -p` through the use-omp wrapper
 #     (set USE_OMP_RUN to its run-omp.sh path).
+#   --hide-user-skills (claude only) loads no user settings, so an installed copy can't shadow
+#     the source skill; the user's global CLAUDE.md is appended to the system prompt instead.
 #   Each scenario gets a fresh sandbox under $TMPDIR: a git repository and, for the notes
 #   scenarios, a notes home with its own git history and a preferences file reached through
 #   XDG_CONFIG_HOME (personal-copy adds an agent-memory directory instead). A copy of the
@@ -17,7 +20,7 @@ repo=$(CDPATH= cd -- "$(dirname "$0")/.." && pwd)
 evals="$repo/evals"
 source_skill="$repo/skills/saving-session-state"
 all=(repo-only shared-repo notes-home stale-claim already-captured relay-caller relay-captured personal-copy)
-harness=claude model="" thinking=low keep=0
+harness=claude model="" thinking=low keep=0 hide_user=0
 scenarios=()
 while [ $# -gt 0 ]; do
   case $1 in
@@ -25,7 +28,8 @@ while [ $# -gt 0 ]; do
     --model) model=$2; shift 2 ;;
     --thinking) thinking=$2; shift 2 ;;
     --keep) keep=1; shift ;;
-    -h | --help) sed -n '2,13p' "$0"; exit 0 ;;
+    --hide-user-skills) hide_user=1; shift ;;
+    -h | --help) sed -n '2,16p' "$0"; exit 0 ;;
     -*) echo "unknown option: $1" >&2; exit 2 ;;
     *) scenarios+=("$1"); shift ;;
   esac
@@ -39,6 +43,16 @@ case $harness in
     ;;
   *) echo "unknown harness: $harness" >&2; exit 2 ;;
 esac
+# Claude Code ranks personal skills above project skills, so an installed copy that differs from
+# the source shadows the sandbox copy. Hiding user settings hides it; the global CLAUDE.md that
+# also lives there is passed back in so the user's standing rules still apply.
+user_args=()
+if [ "$hide_user" = 1 ]; then
+  [ "$harness" = claude ] || { echo "--hide-user-skills is for --harness claude" >&2; exit 2; }
+  user_args=(--setting-sources project,local)
+  global_md="${CLAUDE_CONFIG_DIR:-$HOME/.claude}/CLAUDE.md"
+  [ -f "$global_md" ] && user_args+=(--append-system-prompt-file "$global_md")
+fi
 
 failures=0 scenario_failures=0
 pass() { printf 'PASS  %s\n' "$1"; }
@@ -153,7 +167,7 @@ run_agent() {
       --tools Skill Read Edit Write Bash Glob Grep \
       --add-dir "$dir/notes" "$dir/config" "$dir/tmp" "$dir/memory" \
       --allowedTools 'Bash(git *)' 'Bash(cat *)' 'Bash(ls *)' 'Bash(echo *)' 'Bash(printenv *)' 'Bash(python -m pytest*)' \
-      ${model:+--model "$model"} < "$pf" > "$dir/trace.txt" 2> "$dir/stderr.txt")
+      ${user_args[@]+"${user_args[@]}"} ${model:+--model "$model"} < "$pf" > "$dir/trace.txt" 2> "$dir/stderr.txt")
     rc=$?
     jq -rs '[.[] | select(.type == "result")] | last | .result // ""' "$dir/trace.txt" > "$dir/answer.md" 2> /dev/null
     if [ "$rc" -eq 0 ] && jq -es '[.[] | select(.type == "result")] | last
