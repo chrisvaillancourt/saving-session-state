@@ -5,11 +5,11 @@ An [Agent Skill](https://agentskills.io) that saves a work session's state befor
 At a stopping point, the agent:
 
 1. reads your preferences, which say where your notes live and when to use them;
-2. lists everything the session touched, checking each repository with git;
+2. lists everything the session touched, checking each repository with git, and, after a compaction or resume, reading the earlier turns back from the transcript or a session-search tool;
 3. finds the **gaps**: decisions, gotchas, workarounds, status, next steps and open questions that live only in the conversation;
 4. gives each gap one **durable home**: the repository's docs, your notes, a tracker, or a drafted ticket comment for you to approve. A repository's gotcha goes to the repository even when your notes or an agent's memory already hold it, and a gotcha with a fixable cause gets its fix recorded as a next step, not only its workaround;
 5. updates those homes in place, so a status section says where things stand now instead of growing into a log;
-6. writes a handoff note only for what has no other home, or when the tool that called it asks for one;
+6. writes a handoff note only for what has no other home, or when the tool that called it asks for one, with the session id so a later agent can search the transcript for detail the note left out;
 7. commits the docs and notes it wrote, leaving the session's in-progress work as it is, and reports what it saved where.
 
 When the session's artifacts already hold everything, it says so and writes nothing.
@@ -48,7 +48,7 @@ Start a new session after installing. A session that's already running may not s
 
 ## Use
 
-Say you're at a stopping point ("I'm done for today; save the session state", "update the notes with what we did before I close this") or invoke it by name:
+Say you're at a stopping point ("I'm done for today; save the session state", "update the notes with what we did before I close this"), at a milestone in long autonomous work, or before a likely compaction, or invoke it by name:
 
 | Harness | Command |
 |---|---|

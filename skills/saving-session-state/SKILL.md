@@ -1,6 +1,6 @@
 ---
 name: saving-session-state
-description: Saves a work session's state to durable homes at a stopping point. It updates the docs, notes, trackers and tickets the work touched with what was done, decisions, issues and workarounds, status and next steps, and writes a handoff note only for what has no other home. Use when the user wraps up or pauses work and wants the session recorded before closing it, or before compacting or handing off to a new session. Not for routine doc edits in the middle of a task.
+description: Saves a work session's state to durable homes at a stopping point. It updates the docs, notes, trackers and tickets the work touched with what was done, decisions, issues and workarounds, status and next steps, and writes a handoff note only for what has no other home. Use when the user wraps up or pauses work and wants the session recorded before closing it, at a milestone in long autonomous work, before a likely compaction, or before handing off to a new session. Not for routine doc edits in the middle of a task. Not for the daily cross-source catch-up or a journal entry.
 license: MIT
 ---
 
@@ -27,11 +27,13 @@ Done when you know every notes home that applies to this session, and the rules 
 
 List every place the session touched: repositories and directories, files created or edited, branches, commits, uncommitted changes, stashes and worktrees, pull requests, tickets, messages and other external writes, jobs or processes still running, and files left in temporary or scratch directories. Check each repository with `git status` and `git log`; memory of the session isn't evidence of its current state.
 
+If the session was compacted or resumed, its earlier turns survive only as a summary, which drops ids, errors, commands and decisions. Read those turns back from the session's transcript, or from a session-search tool such as funes, before listing anything. For an exhaustive list, such as every external write the session made, search the session for the literal commands (`gh pr create`, `comment add`, a message-posting tool) rather than relying on a ranked search, which returns only the best matches.
+
 Done when each touched place is listed with its current state.
 
 ## 3. Find the gaps
 
-A **gap** is a fact the next session needs that no durable home holds yet, or holds only in a stale form. Go through the conversation for each kind:
+A **gap** is a fact the next session needs that no durable home holds yet, or holds only in a stale form. Go through the conversation, including any earlier turns you read back in step 2, for each kind:
 
 - What was done, and how it was verified (the command and its result).
 - Work in progress, and exactly where it stands, including uncommitted files.

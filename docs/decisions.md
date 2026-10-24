@@ -20,6 +20,7 @@ Each entry records what was decided, why, the alternatives, and when to revisit 
 14. [A save commits only what it wrote](#14-a-save-commits-only-what-it-wrote)
 15. [A correct record stays as written](#15-a-correct-record-stays-as-written)
 16. [Repository gotchas go to the repository; fixes are recorded, not made](#16-repository-gotchas-go-to-the-repository-fixes-are-recorded-not-made)
+17. [Read compacted turns back; the note records the session id](#17-read-compacted-turns-back-the-note-records-the-session-id)
 
 ## 1. A standalone skill in its own repository
 
@@ -196,3 +197,20 @@ The standing-instructions exception came from an eval. In `notes-home`, Claude c
 **Evidence, and its limits:** the evidence is the live trial and the audit above, both observational. The `personal-copy` eval is a regression guard, not a reproduction: every check passed in all 11 runs against the pre-change skill (Claude and omp, including 2 Claude runs with the gotcha in Claude Code's real auto-memory directory, and 4 with the shell-alias checks). So it doesn't meet AGENTS.md's "fails without it" rule, recorded here as an exception: the scripted sandbox didn't reproduce the trial's miss, and the models already keep a shell alias out of the repository. "Record the fix as a next step" has no check at all. See [evals.md](evals.md#results).
 
 **Revisit if:** an eval or real save puts a personal-setup gotcha in a shared repository; a real save records a fixable gotcha's workaround with no fix as a next step (add a check then); saves start drafting fixes nobody asked for; or someone wants a variant whose preferences route setup gotchas to an agent memory, the realistic way a repository gotcha could be mistaken for a setup one.
+
+## 17. Read compacted turns back; the note records the session id
+
+**Decision:** After a compaction or resume, step 2 reads the session's earlier turns back from its transcript or a session-search tool before listing gaps, and uses a literal per-session search, not a ranked one, for exhaustive lists such as every external write. The handoff note records the harness's session id so a later agent can search the transcript for detail the note left out. The description adds two triggers (a milestone in long autonomous work, before a likely compaction) and says the skill isn't for a daily cross-source catch-up or a journal entry.
+
+**Why:**
+
+- **Found in an audit of real use (2026-10-24):** the skill often runs after a compaction or in a resumed session, when the early turns survive only as a summary that drops ids, errors, commands and decisions. Step 3 said "go through the conversation", which then meant the summary.
+- **Ranked search misses items:** a ranked search returns the best matches, so an inventory built from it can silently skip an external write. A literal search scoped to one session is exhaustive.
+- **The note is lossy by design** (decision 8 keeps it to leftovers). A session id costs one line and makes the rest of the transcript reachable. relay builds its continuation prompt from the note, so the id carries into the next session.
+- **Triggers:** the same audit counted save requests the user typed by hand: 27 at the end of a session, 17 after a milestone and 8 before a compaction. The description named only the first and the third. Sibling skills for a daily catch-up and a journal overlap in wording, so the description now rules them out.
+
+**Alternatives:** a global instruction alone (it covers this user's setup but not other users of a public skill); have the note copy more detail instead (contradicts decision 8).
+
+**Evidence, and its limits:** observational (the audit). No eval covers a compacted session or the session-id line yet; the evals weren't rerun for this change.
+
+**Revisit if:** a harness stops exposing its session id, a save after compaction still misses an external write, or the new triggers fire on mid-task prompts.

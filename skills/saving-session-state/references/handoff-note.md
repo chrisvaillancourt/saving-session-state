@@ -19,6 +19,8 @@ Use this shape and drop any section with nothing in it:
 
 Delete after the next session has folded this into durable homes.
 
+Session: <harness> session `<id>`. Its earlier turns are searchable there for detail this note leaves out.
+
 ## Read first
 - <path or link>: <why it matters now>
 
@@ -52,4 +54,5 @@ Delete after the next session has folded this into durable homes.
 
 - **Point, don't summarize.** "Review state is in PR 42" beats restating the review.
 - **Leave out what goes stale fast,** such as approval counts or a ticket's status without context. Point to where the live value is instead.
+- **Record the session id** so a later agent can search this session's transcript for what the note left out (an error's full text, a command, an id). Harnesses expose it in an environment variable, for example `CLAUDE_CODE_SESSION_ID` in Claude Code and `PI_SESSION_ID` in omp; read it with `printenv <NAME>` as a command of its own, as in step 1. A session-search tool such as funes finds a session by this id (for omp, by the session file's name, `<timestamp>_<id>`). Drop the line when no id is available.
 - **List the "Read first" files in reading order,** the most important first. Use plain paths unless the caller asks for a mention syntax (some tools attach `@path` files).
